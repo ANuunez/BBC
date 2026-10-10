@@ -444,6 +444,38 @@ def do_action(action):
     pydirectinput.keyUp(action)
 
 
+def worker():
+    """Run configured actions only while the selected BongoCat window is active."""
+    while not stop_event.is_set():
+        with lock:
+            active = running
+
+        if not active:
+            stop_event.wait(0.05)
+            continue
+
+        try:
+            if not is_bongocat_foreground():
+                if config.get("stop_when_focus_lost", True):
+                    set_running(False, reason="focus")
+                # Never send keyboard/mouse actions to another application.
+                stop_event.wait(0.05)
+                continue
+
+            actions = parse_actions()
+            if not actions:
+                set_running(False, reason="error")
+                stop_event.wait(0.1)
+                continue
+
+            do_action(random.choice(actions))
+            stop_event.wait(random_interval_seconds())
+        except Exception as exc:
+            print(f"[worker] {exc}")
+            set_running(False, reason="error")
+            stop_event.wait(0.1)
+
+
 def set_status(text, color=None):
     if status_label is None or root is None:
         return
